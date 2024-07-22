@@ -1,0 +1,202 @@
+﻿@model List<CoreLayer.ViewModels.Chats.UserGroupViewModel>
+@{
+    ViewData["Title"] = "Home Page";
+}
+<div class="modal fade" id="exampleModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <form class="modal-content" enctype="multipart/form-data" onsubmit="insertGroup(event)">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exampleModalLabel">ایجاد گروه</h5>
+            </div>
+            <div class="modal-body">
+                <input type="text" id="groupName" class="form-control" placeholder="نام گروه را وارد کنید" />
+                <input type="file" accept="image/*" name="image" class="form-control mt-2" />
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">بستن</button>
+                <button type="submit" class="btn btn-success">ایجاد گروه</button>
+            </div>
+        </form>
+    </div>
+</div>
+<div class="row">
+    <div class="col-8 chat-content">
+        <div class="header" style="display: none">
+            <img src="img/Default.jpg"/>
+            <h2>علی</h2>
+           
+        </div>
+        <div class="chats">
+            
+        </div>
+        <div class="footer" style="display: none">
+            <form onsubmit="sendMessage(event)">
+                <input id="messageText" type="text" class="form-control" placeholder="متن خود را وارد کنید">
+                <button class="btn btn-success">
+                    ارسال
+                    <i class="fa fa-send"></i>
+                    
+                </button>
+            </form>
+        </div>
+    </div>
+    <div class="col-4 rooms">
+        <Ul>
+            <li>
+                <form>
+                    <input type="text" onkeyup="search()" placeholder="جستوجو کنید" id="search_input" class="form-control" />
+                    <i class="fa fas fa-search"></i>
+                </form>
+            </li>
+            <li id="search_result" style="cursor: none; padding: 0;display: none">
+                <ul>
+                </ul>
+
+            </li>
+            <li id="user_groups" style="cursor: none;padding: 0">
+                <ul>
+                    <li>
+                        <button data-toggle="modal" data-target="#exampleModal" class="btn btn-success btn-block" style="width: 100%">
+                            <i class="fa fa-plus"></i>
+                            ایجاد گروه جدید
+                        
+                        </button>
+                    </li>
+                    @foreach (var item in Model)
+                    {
+                        <li onclick="joinInGroup('@item.Token')">
+                            @item.GroupName
+                            <img src="/image/groups/@item.ImageName" />
+                            @if (item.LastChat != null)
+                            {
+                                var time = item.LastChat.CreateDate;
+                                <span>@time.Date @time.Minute : @time.Second</span>
+                            }
+                        </li>
+                    }
+                </ul>
+            </li>
+
+
+        </Ul>
+    </div>
+</div>
+@section Scripts
+{
+    <script src="/lib/microsoft/signalr/dist/browser/signalr.min.js"></script>
+    <script src="/js/SignalrCustome.js"></script>
+    <script>
+        $(document).ready(function () {
+            if (Notification.permission !== "granted") {
+                Notification.requestPermission();
+            }
+        });
+        var currentGroupId = 0;
+        var userId = 0;
+
+        var connection = new signalR.HubConnectionBuilder()
+            .withUrl("/chat")
+            .build();
+
+        connection.on("Welcome",
+            function (id) {
+                userId = id;
+            });
+        connection.on("ReceiveMessage", receive);
+        connection.on("NewGroup", appendGroup);
+        connection.on("JoinGroup", joined);
+        connection.on("ReceiveNotification", sendNotification);
+        connection.start();
+
+        function sendNotification(chat) {
+            if (Notification.permission === "granted") {
+                console.log(chat.groupId);
+                console.log(currentGroupId);
+                if (currentGroupId !== chat.groupId) {
+                    var notification = new Notification(chat.groupName,
+                        {
+                            body: chat.chatBody
+                        });
+
+                }
+            }
+        }
+        function receive(chat) {
+
+            $("#messageText").val('');
+            if (userId === chat.userId) {
+                $(".chats").append(`
+                     <div class="chat-me">
+                        <div class="chat">
+                           <span>${chat.userName}</span>
+                             <p>${chat.chatBody}</p>
+                             <span>${chat.createDate}</span>
+                              <i class="fas fa-check"></i>
+                         </div>
+                      </div>
+                 `);
+            } else {
+                $(".chats").append(`
+
+                                            <div class="chat-you">
+                                                            <div class="chat">
+                                                                <span>${chat.userName}</span>
+                                                                <p>${chat.chatBody}</p>
+                                                                <span>${chat.createDate}</span>
+                                                            </div>
+                                                        </div>
+                                                    `);
+            }
+
+        }
+
+        function sendMessage(event) {
+            event.preventDefault();
+            var text = $("#messageText").val();
+            if (text) {
+                connection.invoke("SendMessage", text, currentGroupId);
+
+            } else {
+                alert("Error");
+            }
+        }
+
+        function joined(group, chats) {
+            $(".header").css("display", "block");
+            $(".footer").css("display", "block");
+            $(".header h2").html(group.groupTitle);
+            $(".header img").attr("src", `/image/groups/${group.imageName}`);
+            currentGroupId = group.id;
+            $(".chats").html("");
+            for (var i in chats) {
+                var chat = chats[i];
+                if (userId === chat.userId) {
+                    $(".chats").append(`
+                                            <div class="chat-me">
+                                                            <div class="chat">
+                                                                <span>${chat.userName}</span>
+                                                                <p>${chat.chatBody}</p>
+                                                                <span>${chat.createDate}</span>
+                                                            </div>
+                                                        </div>
+                                                    `);
+                } else {
+                    $(".chats").append(`
+
+                                            <div class="chat-you">
+                                                            <div class="chat">
+                                                        <span>${chat.userName}</span>
+                                                                <p>${chat.chatBody}</p>
+                                                                <span>${chat.createDate}</span>
+                                                            </div>
+                                                        </div>
+                                                    `);
+                }
+            }
+        }
+
+        function joinInGroup(token) {
+            connection.invoke("JoinGroup", token, currentGroupId);
+        }
+    </script>
+}
